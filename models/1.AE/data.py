@@ -1,35 +1,47 @@
 import tensorflow as tf
-from tensorflow.keras import datasets
+import tensorflow_datasets as tfds
 
-BATCH_SIZE = 64
-SHUFFLE_BUFFER_SIZE = 1000
-
-
-def normalization(images, labels):
-    images = images / 255
-    return images, labels
+# data module이 담당하는 것은 데이터 로드
+# 또는 이미지 데이터 증강 및 전처리 레이어
 
 
-def load_mnist(flatten=True) -> (tf.data.Dataset, tf.data.Dataset):
-    """ return train_ds, test_ds """
-    (
-        (train_images, train_labels),
-        (test_images, test_labels),
-    ) = datasets.mnist.load_data()
+def flower_load():
+    data_url = "https://storage.googleapis.com/download.tensorflow.org/example_images/flower_photos.tgz"
+    data_dir = tf.keras.utils.get_file("flower_photos", origin=data_url, untar=True)
+    train_ds = tf.keras.preprocessing.image_dataset_from_directory(
+        data_dir,
+        validation_split=0.2,
+        seed=1207,
+        subset="training",
+    )  # shape=(32, 180, 180, 3), dtype=float32,
 
-    if flatten:
-        train_images = train_images.reshape((60000, 28 * 28))
-    else:
-        train_images = train_images.reshape((60000, 28, 28, 1))
+    val_ds = tf.keras.preprocessing.image_dataset_from_directory(
+        data_dir,
+        validation_split=0.2,
+        seed=1207,
+        subset="validation",
+    )  # shape=(32, 180, 180, 3), dtype=float32,
+    return train_ds, val_ds
 
-    train_ds = tf.data.Dataset.from_tensor_slices((train_images, train_labels))
-    test_ds = tf.data.Dataset.from_tensor_slices((test_images, test_labels))
 
-    train_ds = (
-        train_ds.map(normalization)
-        .shuffle(SHUFFLE_BUFFER_SIZE)
-        .batch(BATCH_SIZE)
+def mnist_load():
+    dataset, info = tfds.load("mnist", with_info=True, as_supervised=True)
+    train_ds, val_ds = dataset["train"], dataset["test"]
+    return train_ds, val_ds, info
+
+
+def augmentataion_layer(IMG_HEIGHT, IMG_WIDTH):
+    augmentataion_layers = tf.keras.Sequential(
+        [
+            tf.keras.layers.experimental.preprocessing.RandomFlip(
+                "horizontal", input_shape=(IMG_HEIGHT, IMG_WIDTH, 3)
+            ),
+            tf.keras.layers.experimental.preprocessing.RandomRotation(0.1),
+            tf.keras.layers.experimental.preprocessing.RandomZoom(0.3),
+        ]
     )
-    test_ds = test_ds.map(normalization).batch(BATCH_SIZE)
+    return augmentataion_layers
 
-    return train_ds, test_ds
+
+def normalization_layer():
+    return tf.keras.layers.experimental.preprocessing.Rescaling(1.0 / 255)
